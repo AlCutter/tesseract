@@ -34,6 +34,8 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/transparency-dev/tessera"
 	tposix "github.com/transparency-dev/tessera/storage/posix"
 	tposix_as "github.com/transparency-dev/tessera/storage/posix/antispam"
@@ -89,6 +91,10 @@ func main() {
 	flag.Parse()
 	ctx := context.Background()
 
+	reg := prometheus.NewRegistry()
+	shutdownOTel := initOTel(ctx, *origin, reg)
+	defer shutdownOTel(ctx)
+
 	signer := signerFromFlags()
 
 	chainValidationConfig := tesseract.ChainValidationConfig{
@@ -109,6 +115,7 @@ func main() {
 	klog.CopyStandardLogTo("WARNING")
 	klog.Info("**** CT HTTP Server Starting ****")
 	http.Handle("/", logHandler)
+	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}))
 
 	// Bring up the HTTP server and serve until we get a signal not to.
 	srv := http.Server{Addr: *httpEndpoint}
